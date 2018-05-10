@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>myVue</title>
+</head>
+<body>
+	<div id="app">
+		<form>
+			<input type="text" v-modal="number" />
+			<button type="button" v-click="increment">增加</button>
+		</form>
+		<h5 v-bind="number"></h5>
+	</div>
+	<script type="text/javascript">
+		function myVue(options) {
+			this._init(options);
+		}
+		myVue.prototype._init = function(options) {
+			this.$options = options;
+			this.$data = options.data;
+			this.$el = document.querySelector(options.el);
+			this.$methods = options.methods;
+
+			this._binding = {};
+			this._observer(this.$data);
+			this._complie(this.$el);
+		}
+		myVue.prototype._observer = function(obj) {
+			var value;
+			for(key in obj) {
+				if(obj.hasOwnProperty(key)) {
+					value = obj[key];
+					this._binding[key] = {
+						_directives: []
+					}
+					var binding = this._binding[key];
+					if(typeof value === 'object' ) {
+						this._observer(value);
+					}
+					Object.defineProperty(this.$data, key, {
+						enumerable: true,
+						configurable: true,
+						get: function() {
+							console.log('获取: ', value);
+							return value;
+						},
+						set: function(newVal) {
+							console.log('设置: ', newVal);
+							if(value !== newVal) {
+								value = newVal;
+								binding._directives.forEach(function(item) {
+									item.update();
+								})
+							}
+						}
+					});
+				}
+			}
+		}
+		myVue.prototype._complie = function(root) {
+			var _this = this;
+			var nodes = root.children;
+			for(var i=0; i<nodes.length; i++) {
+				var node = nodes[i];
+				if(node.children.length) {
+					this._complie(node);
+				}
+				if(node.hasAttribute('v-click')) {
+					node.onclick = (function() {
+						var attrValue = node.getAttribute('v-click');
+						//bind是使data的作用域与method函数的作用域保持一致
+						return _this.$methods[attrValue].bind(_this.$data);
+					})();
+				}
+				if(node.hasAttribute('v-modal') && (node.tagName.toLowerCase() === 'input' || node.tagName.toLowerCase() === 'textarea')) {
+					var attrVal = node.getAttribute('v-modal');
+					this._binding[attrVal]._directives.push(new Watcher(
+						'input',
+						node,
+						_this,
+						attrVal,
+						'value'
+					));
+
+					node.addEventListener('input', function() {
+						// 保持data的number和input的value保持一致
+						return function() {
+							_this.$data[attrVal] = node.value;
+						}
+					})
+				}
+
+				if(node.hasAttribute('v-bind')) {
+					var attrVal = node.getAttribute('v-bind');
+					this._binding[attrVal]._directives.push(new Watcher(
+						'text',
+						node,
+						_this,
+						attrVal,
+						'innerHTML'
+					));
+				}
+			}
+		}
+		function Watcher(name, el, vm, exp, attr) {
+			this.name = name; // node的标签名称，例如input
+			this.el = el; // node
+			this.vm = vm; // myVue的实例
+			this.exp = exp; // 对应data的属性，例如number
+			this.attr = attr; // node的属性，例如value，或者innerHTML
+
+			this.update();
+		}
+		Watcher.prototype.update = function() {
+			this.el[this.attr] = this.vm.$data[this.exp];
+		}
+		window.onload = function() {
+			var app = new myVue({
+				el: '#app',
+				data: {
+					number: 0
+				},
+				methods: {
+					increment: function() {
+						this.number++;
+					}
+				}
+			});
+
+		}
+	</script>
+</body>
+</html>
